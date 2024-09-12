@@ -3028,13 +3028,19 @@ When the function returns,
 all arguments and the function value are popped
 and the call results are pushed onto the stack.
 The number of results is adjusted to @id{nresults},
-unless @id{nresults} is @defid{LUA_MULTRET}.
-In this case, all results from the function are pushed;
+unless @id{nresults} is @defid{LUA_MULTRET},
+which makes all results from the function to be pushed.
+In the first case, an explicit number of results,
+the caller must ensure that the stack has space for the
+returned values.
+In the second case, all results,
 Lua takes care that the returned values fit into the stack space,
 but it does not ensure any extra space in the stack.
 The function results are pushed onto the stack in direct order
 (the first result is pushed first),
 so that after the call the last result is on the top of the stack.
+
+The maximum value for @id{nresults} is 250.
 
 Any error while calling and running the function is propagated upwards
 (with a @id{longjmp}).
@@ -3713,8 +3719,8 @@ Lua will do all memory allocation for this state
 through this function @seeF{lua_Alloc}.
 The second argument, @id{ud}, is an opaque pointer that Lua
 passes to the allocator in every call.
-The third argument, @id{seed}, is a seed for the hashing of
-strings when they are used as table keys.
+The third argument, @id{seed},
+is a seed for the hashing of strings.
 
 }
 
@@ -3942,6 +3948,8 @@ holding the string content,
 and @id{len} is the length of the string.
 The string should have a zero at its end,
 that is, the condition @T{s[len] == '\0'} should hold.
+As with any string in Lua,
+the length must fit in a Lua integer.
 
 If @id{falloc} is different from @id{NULL},
 that function will be called by Lua
@@ -3987,7 +3995,7 @@ The conversion specifiers can only be
 @Char{%p} (inserts a pointer),
 @Char{%d} (inserts an @T{int}),
 @Char{%c} (inserts an @T{int} as a one-byte character), and
-@Char{%U} (inserts a @T{long int} as a @x{UTF-8} byte sequence).
+@Char{%U} (inserts an @T{unsigned long} as a @x{UTF-8} byte sequence).
 
 This function may raise errors due to memory overflow
 or an invalid conversion specifier.
@@ -4260,8 +4268,9 @@ you push the main function plus any arguments
 onto the empty stack of the thread.
 then you call @Lid{lua_resume},
 with @id{nargs} being the number of arguments.
-This call returns when the coroutine suspends or finishes its execution.
-When it returns,
+The function returns when the coroutine suspends,
+finishes its execution, or raises an unprotected error.
+When it returns without errors,
 @id{*nresults} is updated and
 the top of the stack contains
 the @id{*nresults} values passed to @Lid{lua_yield}
@@ -4272,9 +4281,11 @@ or returned by the body function.
 without errors,
 or an error code in case of errors @see{statuscodes}.
 In case of errors,
-the error object is on the top of the stack.
+the error object is pushed on the top of the stack.
+(In that case, @id{nresults} is not updated,
+as its value would have to be 1 for the sole error object.)
 
-To resume a coroutine,
+To resume a suspended coroutine,
 you remove the @id{*nresults} yielded values from its stack,
 push the values to be passed as results from @id{yield},
 and then call @Lid{lua_resume}.
@@ -4820,8 +4831,8 @@ typedef struct lua_Debug {
   unsigned char nparams;      /* (u) number of parameters */
   char isvararg;              /* (u) */
   char istailcall;            /* (t) */
-  unsigned short ftransfer;   /* (r) index of first value transferred */
-  unsigned short ntransfer;   /* (r) number of transferred values */
+  int ftransfer;              /* (r) index of first value transferred */
+  int ntransfer;              /* (r) number of transferred values */
   char short_src[LUA_IDSIZE]; /* (S) */
   /* private part */
   @rep{other fields}
@@ -7310,7 +7321,7 @@ which must be a string.
 The format string follows the same rules as the @ANSI{sprintf}.
 The accepted conversion specifiers are
 @id{A}, @id{a}, @id{c}, @id{d}, @id{E}, @id{e}, @id{f}, @id{G}, @id{g},
-@id{i}, @id{o}, @id{p}, @id{s}, @id{u}, @id{X}, and @id{x},
+@id{i}, @id{o}, @id{p}, @id{s}, @id{u}, @id{X}, @id{x}, and @Char{%},
 plus a non-C specifier @id{q}.
 The accepted flags are @Char{-}, @Char{+}, @Char{#},
 @Char{0}, and @Char{ } (space).
@@ -8819,7 +8830,7 @@ because of its reliance on @CId{setlocale}.
 
 @LibEntry{os.time ([table])|
 
-Returns the current time when called without arguments,
+Returns the current local time when called without arguments,
 or a time representing the local date and time specified by the given table.
 This table must have fields @id{year}, @id{month}, and @id{day},
 and may have fields
@@ -9381,6 +9392,11 @@ Moreover, there were some changes in the parameters themselves.
 @sect2{@title{Incompatibilities in the API}
 
 @itemize{
+
+@item{
+@Lid{lua_newstate} has a third parameter,
+a seed for the hashing of strings.
+}
 
 @item{
 The function @id{lua_resetthread} is deprecated;
